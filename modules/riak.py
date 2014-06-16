@@ -4,17 +4,13 @@ Support for riak
 
 import salt.utils
 
-__outputter__ = {
-    'signal': 'txt',
-}
 
 def __virtual__():
     '''
     Only load the module if riak is installed
     '''
-    cmd = 'riak'
-    if salt.utils.which(cmd):
-        return cmd
+    if salt.utils.which('riak'):
+        return True
     return False
 
 
@@ -23,6 +19,8 @@ def version():
     Return Riak node version
 
     CLI Example::
+
+    .. code-block:: bash
 
         salt '*' riak.version
     '''
@@ -35,7 +33,7 @@ def version():
 
 
 def ping():
-    if is_up() == True:
+    if is_up() is True:
         return "pong"
     else:
         return ""
@@ -47,14 +45,11 @@ def is_up():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.is_up
     '''
-    cmd = 'riak ping'
-    out = __salt__['cmd.run'](cmd).split('\n')
-    if out[-1] == "pong":
-        return True
-    else:
-        return False
+    return not bool(__salt__['cmd.retcode']('riak ping'))
 
 
 def start():
@@ -63,17 +58,11 @@ def start():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.start
     '''
-    cmd = 'riak start'
-    out = __salt__['cmd.run'](cmd).split('\n')
-    msgs = [line for line in out if not line.startswith("!!!!")]
-    if len(msgs) > 0 and msgs[0].startswith("Attempting"):
-        del(msgs[0])
-    if len(msgs) == 0 or msgs[0] == "Node is already running!":
-        return True
-    else:
-        return False
+    return not bool(__salt__['cmd.retcode']('riak start'))
 
 
 def stop():
@@ -83,17 +72,11 @@ def stop():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.stop
     '''
-    cmd = 'riak stop'
-    out = __salt__['cmd.run'](cmd).split('\n')
-    msgs = [line for line in out if not line.startswith("!!!!")]
-    if len(msgs) > 0 and msgs[0].startswith("Attempting"):
-        del(msgs[0])
-    if msgs[0] in ("ok", "Node is not running!"):
-        return True
-    else:
-        return False
+    return not bool(__salt__['cmd.retcode']('riak stop'))
 
 
 def restart():
@@ -103,17 +86,11 @@ def restart():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.restart
     '''
-    cmd = 'riak restart'
-    out = __salt__['cmd.run'](cmd).split('\n')
-    msgs = [line for line in out if not line.startswith("!!!!")]
-    if len(msgs) > 0 and msgs[0].startswith("Attempting"):
-        del(msgs[0])
-    if msgs[0] == "ok":
-        return True
-    else:
-        return False
+    return not bool(__salt__['cmd.retcode']('riak restart'))
 
 
 def cluster_join(node):
@@ -124,6 +101,8 @@ def cluster_join(node):
         The full node name, in the form user@ip-address
 
     CLI Example::
+
+    .. code-block:: bash
 
         salt '*' riak.cluster_join <node>
     '''
@@ -155,6 +134,8 @@ def cluster_leave(node=None, force=False):
         and should be used with caution.
 
     CLI Example::
+
+    .. code-block:: bash
 
         salt '*' riak.cluster_leave <node> [<force>]
     '''
@@ -194,6 +175,8 @@ def cluster_replace(node1, node2, force=False):
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.cluster_replace <node>
     '''
     if len(node1.split("@")) != 2 and len(node2.split("@")) != 2:
@@ -215,6 +198,8 @@ def cluster_plan():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.cluster_plan
     '''
     cmd = 'riak-admin cluster plan'
@@ -233,6 +218,8 @@ def cluster_clear():
     Clear the currently staged cluster changes.
 
     CLI Example::
+
+    .. code-block:: bash
 
         salt '*' riak.cluster_clear
     '''
@@ -253,6 +240,8 @@ def cluster_commit():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.cluster_commit
     '''
     cmd = 'riak-admin cluster commit'
@@ -272,6 +261,8 @@ def ringready():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.ringready
     '''
     cmd = 'riak-admin ringready'
@@ -289,6 +280,8 @@ def ring_status():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.ring_status
     '''
     cmd = 'riak-admin ring-status'
@@ -303,19 +296,40 @@ def ring_status():
 
 def member_status():
     '''
-    Prints the current status of all cluster members.
+    Get cluster member status
 
-    CLI Example::
+    CLI Example:
+
+    .. code-block:: bash
 
         salt '*' riak.member_status
     '''
+    ret = {'membership': {},
+            'summary': {'Valid': 0,
+                        'Leaving': 0,
+                        'Exiting': 0,
+                        'Joining': 0,
+                        'Down': 0,
+                        }
+            }
     cmd = 'riak-admin member-status'
-    out = __salt__['cmd.run'](cmd).split('\n')
-    out = out[1:len(out)]
-    ret = []
+    out = __salt__['cmd.run'](cmd).splitlines()
     for line in out:
-        if len(line) > 0 and line[:1] != "=" and line[:1] != "-":
-            ret.append(line)
+        if line.startswith(('=', '-', 'Status')):
+            continue
+        if '/' in line:
+            # We're in the summary line
+            comps = line.split('/')
+            for item in comps:
+                key, val = item.split(':')
+                ret['summary'][key.strip()] = val.strip()
+        vals = line.split()
+        if len(vals) == 4:
+            # We're on a node status line
+            ret['membership'][vals[3]] = {'Status': vals[0],
+                                          'Ring': vals[1],
+                                          'Pending': vals[2],
+                                          }
     return ret
 
 
@@ -324,6 +338,8 @@ def transfers():
     Identifies nodes that are awaiting transfer of one or more partitions.
 
     CLI Example::
+
+    .. code-block:: bash
 
         salt '*' riak.transfers
     '''
@@ -341,6 +357,8 @@ def diag():
 
     CLI Example::
 
+    .. code-block:: bash
+
         salt '*' riak.diag
     '''
     cmd = 'riak-admin diag'
@@ -357,6 +375,8 @@ def status():
     information, and version numbers.
 
     CLI Example::
+
+    .. code-block:: bash
 
         salt '*' riak.status
     '''
