@@ -388,3 +388,21 @@ def status():
         if len(parts) == 2:
             ret.append({parts[0]: parts[1]})
     return ret
+
+
+def test():
+    '''
+    Runs a test of a few standard Riak operations against the running node.
+
+    CLI Example::
+
+    .. code-block:: bash
+
+        salt '*' riak.test
+    '''
+    cmd = 'riak-admin test'
+    out = __salt__['cmd.run'](cmd).split('\n')
+    for line in out:
+        if 'Successfully completed' in line:
+            return True
+    return False
