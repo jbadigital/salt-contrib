@@ -314,6 +314,8 @@ def member_status():
             }
     cmd = 'riak-admin member-status'
     out = __salt__['cmd.run'](cmd).splitlines()
+    if out == 'Node is not running':
+        return {'error': out}
     for line in out:
         if line.startswith(('=', '-', 'Status')):
             continue
